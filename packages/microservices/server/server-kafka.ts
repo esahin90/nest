@@ -304,12 +304,15 @@ export class ServerKafka extends Server implements CustomTransportStrategy {
   ): Promise<any> {
     const handler = this.getHandlerByPattern(pattern);
     if (!handler) {
-      return this.logger.error(NO_EVENT_HANDLER`${pattern}`);
+      return this.logger.error(
+        NO_EVENT_HANDLER`${this.normalizePattern(pattern)}`,
+      );
     }
-    const resultOrStream = await handler(packet.data, context);
-    if (isObservable(resultOrStream)) {
-      await lastValueFrom(resultOrStream);
-    }
+
+    const response$ = this.transformToObservable(handler(packet.data, context));
+    const replayStream$ = new ReplaySubject();
+    await this.combineStreamsAndThrowIfRetriable(response$, replayStream$);
+    await lastValueFrom(replayStream$);
   }
 
   protected initializeSerializer(options: KafkaOptions['options']) {
